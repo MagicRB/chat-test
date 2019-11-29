@@ -1,7 +1,7 @@
 use std::fmt::{ Formatter, Display, Debug, Error };
 use serde::{ Serialize, Deserialize };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Eq)]
 pub struct PublicKey ([u8; 32]);
 
 impl PublicKey {
@@ -35,5 +35,14 @@ impl Display for PublicKey {
         f.write_str(format!("\"{}\"", base64::encode(&self.0)).as_str()).unwrap();
 
         Ok(())
+    }
+}
+
+impl From<Vec<u8>> for PublicKey {
+    fn from(vec: Vec<u8>) -> Self {
+        let mut slice = [0u8; 32];
+        slice.copy_from_slice(vec.as_slice());
+
+        PublicKey(slice)
     }
 }

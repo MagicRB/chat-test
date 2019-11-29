@@ -3,7 +3,7 @@ use serde::{ Serialize, Deserialize };
 
 big_array! { BigArray; }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Copy, Clone)]
 pub struct PrivateKey (#[serde(with = "BigArray")] [u8; 64]);
 
 impl PrivateKey {
@@ -39,3 +39,24 @@ impl Display for PrivateKey {
         Ok(())
     }
 }
+
+impl From<Vec<u8>> for PrivateKey {
+    fn from(vec: Vec<u8>) -> Self {
+        let mut slice = [0u8; 64];
+        slice.copy_from_slice(vec.as_slice());
+
+        PrivateKey(slice)
+    }
+}
+
+impl PartialEq for PrivateKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.as_ref() == other.0.as_ref()
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        self.0.as_ref() != other.0.as_ref()
+    }
+}
+
+impl Eq for PrivateKey {}

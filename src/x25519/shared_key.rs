@@ -2,7 +2,7 @@ use std::fmt::{ Formatter, Display, Debug, Error };
 use crate::x25519::{PublicKey, PrivateKey};
 use serde::{ Serialize, Deserialize };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Eq)]
 pub struct SharedKey ([u8; 32]);
 
 impl SharedKey {
@@ -36,5 +36,14 @@ impl Display for SharedKey {
         f.write_str(format!("\"{}\"", base64::encode(&self.0)).as_str()).unwrap();
 
         Ok(())
+    }
+}
+
+impl From<Vec<u8>> for SharedKey {
+    fn from(vec: Vec<u8>) -> Self {
+        let mut slice = [0u8; 32];
+        slice.copy_from_slice(vec.as_slice());
+
+        SharedKey(slice)
     }
 }
