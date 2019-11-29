@@ -8,6 +8,9 @@ mod instance;
 mod x25519;
 mod x25519_id_hash;
 pub use x25519_id_hash::x25519IDHash;
+mod shared_mac_secret;
+pub use shared_mac_secret::SharedMacSecret;
+
 
 use std::io::stdin;
 use rand::{ thread_rng, RngCore };
@@ -15,7 +18,7 @@ use crate::{
     instance::{ InstanceBuilder, Instance },
     x25519::{ PrivateKey, PublicKey },
 };
-use crate::instance::Command;
+use crate::instance::{Command, Response};
 
 fn main() {
     let mut rng = thread_rng();
@@ -49,10 +52,29 @@ fn main() {
             "pubkey" => {
                 println!("{}", PublicKey::new(base64::decode(input[1]).unwrap().as_slice()));
             },
+            "shared_mac_secret" => {
+                println!("{}", SharedMacSecret::new(&mut rng));
+            }
             "exit" => {
                 tx.send(Command::Exit).unwrap();
 
                 break
+            },
+            "add_connection" => {
+                let shared_mac_secret = SharedMacSecret::from(base64::decode(input[1]).unwrap());
+                let public_key = PublicKey::from(base64::decode(input[2]).unwrap());
+
+                tx.send(Command::AddConnection {
+                    public_key,
+                    shared_mac_secret,
+                });
+            },
+            "list_connections" => {
+                tx.send(Command::ListConnections);
+
+                if let Response::ListConnections { connections } = rx.recv().unwrap() { //@TODO no unwrap maybe?
+                    println!("{:?}", connections);
+                }
             },
             _ => { println!("Unknown command"); }
         }

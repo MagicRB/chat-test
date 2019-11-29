@@ -102,7 +102,16 @@ impl Instance {
 
             if let Ok(command) = self.rx.recv_timeout(Duration::from_millis(5)) {
                 match command {
-                    Command::Exit => { break }
+                    Command::Exit => { break },
+                    Command::AddConnection { public_key, shared_mac_secret } => {
+                        let x25519_id_hash = x25519IDHash::new(public_key, shared_mac_secret);
+                        self.connections.insert(x25519_id_hash.clone(), Connection {
+                            x25519_id_hash
+                        });
+                    },
+                    Command::ListConnections => {
+                        self.tx.send(Response::ListConnections { connections: self.connections.clone() });
+                    },
                     _ => {}
                 }
             }
