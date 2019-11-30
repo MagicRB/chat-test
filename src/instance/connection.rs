@@ -7,7 +7,8 @@ use crate::{
 
 #[derive(Debug, Copy, Clone)]
 pub struct Connection {
-    pub x25519_id_hash: x25519IDHash,
+    pub local_x25519_id_hash: x25519IDHash,
+    pub remote_x25519_id_hash: x25519IDHash,
     pub public_key: PublicKey,
     pub endpoint: Option<SocketAddr>,
     pub local_ephemeral_blob: Option<EphemeralBlob>,

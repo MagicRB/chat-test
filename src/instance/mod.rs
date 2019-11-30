@@ -110,7 +110,7 @@ impl Instance {
                         if let Data::Handshake { ephemeral_blob } = packet.data {
                             if connection.remote_ephemeral_blob.is_none() {
                                 socket.send_to(bincode::serialize(&Packet {
-                                    hash: connection.x25519_id_hash,
+                                    hash: connection.local_x25519_id_hash,
                                     data: Data::Handshake {
                                         ephemeral_blob: connection.local_ephemeral_blob.unwrap()
                                     }
@@ -127,9 +127,9 @@ impl Instance {
                 match command {
                     Command::Exit => { break },
                     Command::AddConnection { public_key, shared_mac_secret } => {
-                        let x25519_id_hash = x25519IDHash::new(public_key, shared_mac_secret);
                         self.connections.insert(x25519_id_hash.clone(), Connection {
-                            x25519_id_hash,
+                            local_x25519_id_hash: x25519IDHash::new(self.public_key, shared_mac_secret),
+                            remote_x25519_id_hash: x25519IDHash::new(public_key, shared_mac_secret),
                             public_key,
                             endpoint: None,
                             local_ephemeral_blob: Some(EphemeralBlob::new(&mut rng)),
@@ -144,7 +144,7 @@ impl Instance {
                             connection.endpoint = Some(endpoint);
 
                             socket.send_to(bincode::serialize(&Packet {
-                                hash: x25519_id_hash,
+                                hash: connection.local_x25519_id_hash,
                                 data: Data::Handshake {
                                     ephemeral_blob: connection.local_ephemeral_blob.unwrap()
                                 }
