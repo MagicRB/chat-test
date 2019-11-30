@@ -12,7 +12,10 @@ mod shared_mac_secret;
 pub use shared_mac_secret::SharedMacSecret;
 
 
-use std::io::stdin;
+use std::{
+    io::stdin,
+    net::SocketAddr,
+};
 use rand::{ thread_rng, RngCore };
 use crate::{
     instance::{ InstanceBuilder, Instance },
@@ -67,10 +70,19 @@ fn main() {
                 tx.send(Command::AddConnection {
                     public_key,
                     shared_mac_secret,
-                });
+                }).unwrap();
+            },
+            "connect" => {
+                let x25519_id_hash = x25519IDHash::from(base64::decode(input[1]).unwrap());
+                let endpoint = input[2].parse().unwrap();
+
+                tx.send(Command::Connect {
+                    x25519_id_hash,
+                    endpoint
+                }).unwrap();
             },
             "list_connections" => {
-                tx.send(Command::ListConnections);
+                tx.send(Command::ListConnections).unwrap();
 
                 if let Response::ListConnections { connections } = rx.recv().unwrap() { //@TODO no unwrap maybe?
                     println!("{:?}", connections);

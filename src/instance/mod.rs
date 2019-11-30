@@ -20,13 +20,18 @@ use crate::{
 };
 
 mod packet;
-pub use packet::Packet;
+pub use packet::{
+    Packet,
+    Data
+};
 mod command;
 pub use command::Command;
 mod response;
 pub use response::Response;
 mod connection;
 pub use connection::Connection;
+mod ephemeral_blob;
+pub use ephemeral_blob::EphemeralBlob;
 
 pub struct InstanceBuilder {
     control_address: SocketAddr,
@@ -82,20 +87,38 @@ impl Instance {
             public_key,
             rx: instance_rx,
             tx: instance_tx,
-            connections: HashMap::new(),
+            connections: HashMap::new()
         }, (return_tx, return_rx))
     }
 
     fn run_threaded(&mut self) {
         let socket = UdpSocket::bind(self.protocol_address).unwrap();
         socket.set_read_timeout(Some(Duration::from_millis(5))).unwrap();
+        let mut rng = thread_rng();
 
         loop {
             let mut data = [0u8; 4096];
-            if let Ok((length, sender)) = socket.recv_from(&mut data) {
+            if let Ok((_, sender)) = socket.recv_from(&mut data) {
                 if let Ok(packet) = bincode::deserialize::<Packet>(&data) {
                     if let Some(connection) = self.connections.get_mut(&packet.hash) {
+                        if let Some(endpoint) = connection.endpoint {
+                            if sender != endpoint {
+                                connection.endpoint = Some(sender);
+                            }
+                        }
 
+                        if let Data::Handshake { ephemeral_blob } = packet.data {
+                            if connection.remote_ephemeral_blob.is_none() {
+                                socket.send_to(bincode::serialize(&Packet {
+                                    hash: connection.x25519_id_hash,
+                                    data: Data::Handshake {
+                                        ephemeral_blob: connection.local_ephemeral_blob.unwrap()
+                                    }
+                                }).unwrap().as_slice(), sender).unwrap();
+                            } else {
+                                println!("{} sent double handshake something is wrong!", packet.hash);
+                            }
+                        }
                     }
                 }
             }
@@ -106,11 +129,27 @@ impl Instance {
                     Command::AddConnection { public_key, shared_mac_secret } => {
                         let x25519_id_hash = x25519IDHash::new(public_key, shared_mac_secret);
                         self.connections.insert(x25519_id_hash.clone(), Connection {
-                            x25519_id_hash
+                            x25519_id_hash,
+                            public_key,
+                            endpoint: None,
+                            local_ephemeral_blob: Some(EphemeralBlob::new(&mut rng)),
+                            remote_ephemeral_blob: None,
                         });
                     },
                     Command::ListConnections => {
-                        self.tx.send(Response::ListConnections { connections: self.connections.clone() });
+                        self.tx.send(Response::ListConnections { connections: self.connections.clone() }).unwrap();
+                    },
+                    Command::Connect { x25519_id_hash, endpoint } => {
+                        if let Some(connection) = self.connections.get_mut(&x25519_id_hash) {
+                            connection.endpoint = Some(endpoint);
+
+                            socket.send_to(bincode::serialize(&Packet {
+                                hash: x25519_id_hash,
+                                data: Data::Handshake {
+                                    ephemeral_blob: connection.local_ephemeral_blob.unwrap()
+                                }
+                            }).unwrap().as_slice(), endpoint).unwrap();
+                        }
                     },
                     _ => {}
                 }

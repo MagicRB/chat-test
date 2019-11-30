@@ -1,4 +1,7 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+};
 use crate::{
     x25519::PublicKey,
     SharedMacSecret,
@@ -10,7 +13,11 @@ pub enum Command {
     Exit,
     AddConnection {
         public_key: PublicKey,
-        shared_mac_secret: SharedMacSecret
+        shared_mac_secret: SharedMacSecret,
     },
     ListConnections,
+    Connect {
+        x25519_id_hash: x25519IDHash,
+        endpoint: SocketAddr,
+    },
 }
