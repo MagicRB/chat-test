@@ -132,6 +132,7 @@ impl Instance {
                                             }
                                         }).unwrap();
                                         socket.send_to(data.as_slice(), sender).unwrap();
+                                        *sent_handshake = true;
                                     }
                                 }
 
