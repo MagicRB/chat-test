@@ -12,7 +12,7 @@ use std::{
     thread::JoinHandle,
     collections::HashMap,
 };
-use rand::prelude::{ ThreadRng, thread_rng };
+use rand::prelude::thread_rng;
 
 use crate::{
     x25519::{PrivateKey, PublicKey},
@@ -101,24 +101,44 @@ impl Instance {
             if let Ok((_, sender)) = socket.recv_from(&mut data) {
                 if let Ok(packet) = bincode::deserialize::<Packet>(&data) {
                     if let Some(connection) = self.connections.get_mut(&packet.hash) {
-                        if let Some(endpoint) = connection.endpoint {
-                            if sender != endpoint {
-                                connection.endpoint = Some(sender);
-                            }
-                        }
+                        if connection.endpoint.is_none() {
+                            connection.endpoint = Some(sender)
+                        } else if connection.endpoint != Some(sender) {
+                            connection.endpoint = Some(sender)
+                        } // @TODO Denial of Service?
 
-                        if let Data::Handshake { ephemeral_blob } = packet.data {
-                            if connection.remote_ephemeral_blob.is_none() {
-                                let data = bincode::serialize(&Packet {
-                                    hash: connection.local_x25519_id_hash,
-                                    data: Data::Handshake {
-                                        ephemeral_blob: connection.local_ephemeral_blob.unwrap()
+                        match packet.data {
+                            Data::Handshake { ephemeral_blob } => {
+                                let mut ready_to_establish = false;
+
+                                if let connection::State::Pending {
+                                    public_key,
+                                    local_ephemeral_blob,
+                                    remote_ephemeral_blob,
+                                    sent_handshake,
+                                } = &mut connection.state {
+                                    if remote_ephemeral_blob.is_some() {
+                                        println!("Received handshake from {} multiple times!", public_key)
+                                    } else {
+                                        *remote_ephemeral_blob = Some(ephemeral_blob);
+                                        ready_to_establish = true;
                                     }
-                                }).unwrap();
-                                socket.send_to(data.as_slice(), sender).unwrap();
-                            } else {
-                                println!("{} sent double handshake something is wrong!", packet.hash);
-                            }
+
+                                    if !*sent_handshake {
+                                        let data = bincode::serialize(&Packet {
+                                            hash: connection.local_x25519_id_hash,
+                                            data: Data::Handshake {
+                                                ephemeral_blob: local_ephemeral_blob.unwrap()
+                                            }
+                                        }).unwrap();
+                                        socket.send_to(data.as_slice(), sender).unwrap();
+                                    }
+                                }
+
+                                if ready_to_establish {
+                                    connection.state = connection::State::Established { placeholder: () };
+                                }
+                            },
                         }
                     }
                 }
@@ -132,10 +152,13 @@ impl Instance {
                         self.connections.insert(remote_x5519_id_hash.clone(), Connection {
                             local_x25519_id_hash: x25519IDHash::new(self.public_key, shared_mac_secret),
                             remote_x25519_id_hash: remote_x5519_id_hash,
-                            public_key,
                             endpoint: None,
-                            local_ephemeral_blob: Some(EphemeralBlob::new(&mut rng)),
-                            remote_ephemeral_blob: None,
+                            state: connection::State::Pending {
+                                public_key,
+                                local_ephemeral_blob: Some(EphemeralBlob::new(&mut rng)),
+                                remote_ephemeral_blob: None,
+                                sent_handshake: false
+                            },
                         });
                     },
                     Command::ListConnections => {
@@ -143,17 +166,25 @@ impl Instance {
                     },
                     Command::Connect { x25519_id_hash, endpoint } => {
                         if let Some(connection) = self.connections.get_mut(&x25519_id_hash) {
-                            connection.endpoint = Some(endpoint);
-                            let data = bincode::serialize(&Packet {
-                                hash: connection.local_x25519_id_hash,
-                                data: Data::Handshake {
-                                    ephemeral_blob: connection.local_ephemeral_blob.unwrap()
-                                }
-                            }).unwrap();
-                            socket.send_to(data.as_slice(), endpoint).unwrap();
+                            if let connection::State::Pending {
+                                public_key,
+                                local_ephemeral_blob,
+                                remote_ephemeral_blob,
+                                sent_handshake
+                            } = &mut connection.state {
+                                connection.endpoint = Some(endpoint);
+                                *sent_handshake = true;
+
+                                let data = bincode::serialize(&Packet {
+                                    hash: connection.local_x25519_id_hash,
+                                    data: Data::Handshake {
+                                        ephemeral_blob: local_ephemeral_blob.unwrap()
+                                    }
+                                }).unwrap();
+                                socket.send_to(data.as_slice(), endpoint).unwrap();
+                            }
                         }
                     },
-                    _ => {}
                 }
             }
         }
