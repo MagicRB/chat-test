@@ -127,9 +127,10 @@ impl Instance {
                 match command {
                     Command::Exit => { break },
                     Command::AddConnection { public_key, shared_mac_secret } => {
-                        self.connections.insert(x25519_id_hash.clone(), Connection {
+                        let remote_x5519_id_hash = x25519IDHash::new(public_key, shared_mac_secret);
+                        self.connections.insert(remote_x5519_id_hash.clone(), Connection {
                             local_x25519_id_hash: x25519IDHash::new(self.public_key, shared_mac_secret),
-                            remote_x25519_id_hash: x25519IDHash::new(public_key, shared_mac_secret),
+                            remote_x25519_id_hash: remote_x5519_id_hash,
                             public_key,
                             endpoint: None,
                             local_ephemeral_blob: Some(EphemeralBlob::new(&mut rng)),
