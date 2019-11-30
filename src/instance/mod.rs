@@ -13,10 +13,11 @@ use std::{
     collections::HashMap,
 };
 use rand::prelude::thread_rng;
+use openssl::sha::Sha256;
 
 use crate::{
-    x25519::{PrivateKey, PublicKey},
-    x25519IDHash
+    x25519::{PrivateKey, PublicKey, SharedKey},
+    x25519IDHash,
 };
 
 mod packet;
@@ -112,13 +113,13 @@ impl Instance {
                                 let mut ready_to_establish = false;
 
                                 if let connection::State::Pending {
-                                    public_key,
+                                    remote_public_key,
                                     local_ephemeral_blob,
                                     remote_ephemeral_blob,
                                     sent_handshake,
                                 } = &mut connection.state {
                                     if remote_ephemeral_blob.is_some() {
-                                        println!("Received handshake from {} multiple times!", public_key)
+                                        println!("Received handshake from {} multiple times!", remote_public_key)
                                     } else {
                                         *remote_ephemeral_blob = Some(ephemeral_blob);
                                         ready_to_establish = true;
@@ -137,7 +138,29 @@ impl Instance {
                                 }
 
                                 if ready_to_establish {
-                                    connection.state = connection::State::Established { placeholder: () };
+                                    if let connection::State::Pending {
+                                        remote_public_key,
+                                        local_ephemeral_blob,
+                                        remote_ephemeral_blob,
+                                        sent_handshake
+                                    } = connection.state {
+                                        let shared_key = SharedKey::derive(&self.private_key, &remote_public_key);
+
+                                        let mut sha256 = Sha256::new();
+                                        sha256.update(shared_key.as_ref());
+
+                                        if local_ephemeral_blob.as_ref().unwrap() > remote_ephemeral_blob.as_ref().unwrap() {
+                                            sha256.update(local_ephemeral_blob.unwrap().as_ref());
+                                            sha256.update(remote_ephemeral_blob.unwrap().as_ref());
+                                        } else {
+                                            sha256.update(remote_ephemeral_blob.unwrap().as_ref());
+                                            sha256.update(local_ephemeral_blob.unwrap().as_ref());
+                                        }
+
+                                        println!("{}", base64::encode(&sha256.finish()));
+
+                                        connection.state = connection::State::Established { placeholder: () };
+                                    }
                                 }
                             },
                         }
@@ -155,7 +178,7 @@ impl Instance {
                             remote_x25519_id_hash: remote_x5519_id_hash,
                             endpoint: None,
                             state: connection::State::Pending {
-                                public_key,
+                                remote_public_key: public_key,
                                 local_ephemeral_blob: Some(EphemeralBlob::new(&mut rng)),
                                 remote_ephemeral_blob: None,
                                 sent_handshake: false
@@ -168,7 +191,7 @@ impl Instance {
                     Command::Connect { x25519_id_hash, endpoint } => {
                         if let Some(connection) = self.connections.get_mut(&x25519_id_hash) {
                             if let connection::State::Pending {
-                                public_key,
+                                remote_public_key,
                                 local_ephemeral_blob,
                                 remote_ephemeral_blob,
                                 sent_handshake

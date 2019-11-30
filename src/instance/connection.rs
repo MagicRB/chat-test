@@ -16,7 +16,7 @@ pub struct Connection {
 #[derive(Debug, Copy, Clone)]
 pub enum State {
     Pending {
-        public_key: PublicKey,
+        remote_public_key: PublicKey,
         local_ephemeral_blob: Option<EphemeralBlob>,
         remote_ephemeral_blob: Option<EphemeralBlob>,
         sent_handshake: bool,

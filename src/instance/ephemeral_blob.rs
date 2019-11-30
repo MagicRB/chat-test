@@ -5,7 +5,7 @@ use rand::{
     RngCore,
 };
 
-#[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct EphemeralBlob ([u8; 32]);
 
 impl EphemeralBlob {
