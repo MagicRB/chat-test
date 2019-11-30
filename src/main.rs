@@ -88,6 +88,10 @@ fn main() {
                     println!("{:?}", connections);
                 }
             },
+            "info" => {
+                println!("public key: {}", public_key);
+                println!("private key: {}", private_key);
+            },
             _ => { println!("Unknown command"); }
         }
     }
