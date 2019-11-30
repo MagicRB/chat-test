@@ -42,7 +42,7 @@ impl Default for InstanceBuilder {
     fn default() -> Self {
         InstanceBuilder {
             control_address: "127.0.0.1:65500".parse().unwrap(),
-            protocol_address: "127.0.0.1:6555".parse().unwrap(),
+            protocol_address: "0.0.0.0:6555".parse().unwrap(),
         }
     }
 }
@@ -109,12 +109,13 @@ impl Instance {
 
                         if let Data::Handshake { ephemeral_blob } = packet.data {
                             if connection.remote_ephemeral_blob.is_none() {
-                                socket.send_to(bincode::serialize(&Packet {
+                                let data = bincode::serialize(&Packet {
                                     hash: connection.local_x25519_id_hash,
                                     data: Data::Handshake {
                                         ephemeral_blob: connection.local_ephemeral_blob.unwrap()
                                     }
-                                }).unwrap().as_slice(), sender).unwrap();
+                                }).unwrap();
+                                socket.send_to(data.as_slice(), sender).unwrap();
                             } else {
                                 println!("{} sent double handshake something is wrong!", packet.hash);
                             }
@@ -143,13 +144,13 @@ impl Instance {
                     Command::Connect { x25519_id_hash, endpoint } => {
                         if let Some(connection) = self.connections.get_mut(&x25519_id_hash) {
                             connection.endpoint = Some(endpoint);
-
-                            socket.send_to(bincode::serialize(&Packet {
+                            let data = bincode::serialize(&Packet {
                                 hash: connection.local_x25519_id_hash,
                                 data: Data::Handshake {
                                     ephemeral_blob: connection.local_ephemeral_blob.unwrap()
                                 }
-                            }).unwrap().as_slice(), endpoint).unwrap();
+                            }).unwrap();
+                            socket.send_to(data.as_slice(), endpoint).unwrap();
                         }
                     },
                     _ => {}
